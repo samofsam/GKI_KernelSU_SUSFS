@@ -1,5 +1,5 @@
 name: NP03J One-Shot Dispatch
-# trigger-revision: workspace-status-json
+# trigger-revision: yaml-fix-1790617271853
 
 permissions:
   actions: write
