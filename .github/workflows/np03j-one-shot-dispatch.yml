@@ -1,4 +1,5 @@
 name: NP03J One-Shot Dispatch
+# trigger-revision: workspace-status-json
 
 permissions:
   actions: write
