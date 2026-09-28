@@ -80,6 +80,18 @@ runs:
           build/build.sh -j"$(nproc)"
         else
           sed -i '/name = "kernel_aarch64",/a\    check_defconfig = "disabled",' common/BUILD.bazel
+
+          # The target stock GKI was produced from Android build 14259673 at
+          # common commit 11c274d0441f.... Our source tree is intentionally
+          # modified by KSU/SUSFS/NoMount, so normal setlocalversion would add
+          # "-dirty". For this exact locked source, preserve the stock SCM
+          # identity explicitly; the final artifact gate verifies the complete
+          # Linux version line byte-for-byte.
+          if [ "${KERNEL_SOURCE_COMMIT:-}" = "11c274d0441f287e4c37ec7a353cbc3cd169bff9" ]; then
+            printf '%s\n' '-g11c274d0441f' > common/.scmversion
+            echo "[LOCK] common/.scmversion -> -g11c274d0441f"
+          fi
+
           PAGE_SIZE_FLAGS=()
           if [ "$PAGE_SIZE" = "16k" ]; then
             PAGE_SIZE_FLAGS+=(--page_size=16k)
