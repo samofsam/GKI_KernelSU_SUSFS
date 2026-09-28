@@ -232,6 +232,9 @@ jobs:
           PIN_NOMOUNT="6b1be186322d4e0bdc465cf27f6fc0d3679087c6"
           PIN_NEXT_OFFICIAL="c61d876480976e553060789759cc4b54c9e7d816"
           PIN_NEXT_SUSFS="d575262c1b40180a0f915544f42d8c4ab34b874b"
+          PIN_KERNEL_PATCHES="41ae18b35d20e0c6ac04116785a4a1089528ae94"
+          PIN_ANYKERNEL3="e1e9dce98430c5c6f231f7094a8c7f4ecaf50948"
+          PIN_DROIDSPACES="ff39a376f50499b665d187d46909686418570a32"
           PIN_KERNELSU="08a3b087e49227c8a6731c5f1114998b5e25255b"
           PIN_RESUKISU="fa8311f632a215b5381ec644627c6198d1e8a13e"
           PIN_SUKISU_ULTRA="b20dee702035af09cb2ecb5f35443bbc1747f3e6"
@@ -389,10 +392,10 @@ jobs:
             emit "${key}_sukisu_ultra" "$(pick "${PIN_SUSFS_SUKISU_ULTRA[$key]}" https://gitlab.com/simonpunk/susfs4ksu.git refs/heads/${SUSFS_BRANCHES[$key]})"
           done
 
-          # Tracked build helpers (resolved automatically, before the run)
-          emit kernel_patches_commit "$(resolve_sha https://github.com/WildKernels/kernel_patches.git refs/heads/main)"
-          emit anykernel3_commit   "$(resolve_sha https://github.com/WildKernels/AnyKernel3.git refs/heads/gki-2.0)"
-          emit droidspaces_commit  "$(resolve_sha https://github.com/ravindu644/Droidspaces-OSS.git refs/heads/main)"
+          # Build helpers are immutable in verified mode as well.
+          emit kernel_patches_commit "$(pick "$PIN_KERNEL_PATCHES" https://github.com/WildKernels/kernel_patches.git refs/heads/main)"
+          emit anykernel3_commit   "$(pick "$PIN_ANYKERNEL3" https://github.com/WildKernels/AnyKernel3.git refs/heads/gki-2.0)"
+          emit droidspaces_commit  "$(pick "$PIN_DROIDSPACES" https://github.com/ravindu644/Droidspaces-OSS.git refs/heads/main)"
 
           echo "Resolved:"
           env | grep -E '^(nomount_commit|kernelsu_commit|kernelsu_branch|root_commit|susfs_commit_|kernel_patches_commit|anykernel3_commit|droidspaces_commit)' | sort || true
@@ -423,15 +426,8 @@ jobs:
                 run_id=$(gh api "repos/${owner}/${repo}/actions/workflows/${wf}/runs?head_sha=${stock}" \
                   --jq '.workflow_runs[0].id // empty')
                 if [[ -z "${run_id}" ]]; then
-                  echo "No manager build for dev tip ${stock}, falling back to latest successful run" >&2
-                  fb=$(gh api "repos/${owner}/${repo}/actions/workflows/${wf}/runs?branch=dev&status=success&per_page=1")
-                  run_id=$(echo "$fb" | jq -r '.workflow_runs[0].id // empty')
-                  stock=$(echo "$fb" | jq -r '.workflow_runs[0].head_sha // empty')
-                  if [[ -n "$run_id" ]]; then echo "Fallback to ${stock} run ${run_id}" >&2; fi
-                  if [[ -z "${run_id}" ]]; then
-                    echo "ERROR: no ${repo} manager build exists for dev commit ${stock}" >&2
-                    exit 1
-                  fi
+                  echo "ERROR: no exact KernelSU-Next manager build exists for pinned official commit ${stock}" >&2
+                  exit 1
                 fi
                 printf '{"flavor":"%s","owner":"%s","repo":"%s","source":"run","run_id":%s,"stock":"%s","want":"manager,manager-spoofed"}' \
                   "$flavor" "$owner" "$repo" "$run_id" "$stock"
