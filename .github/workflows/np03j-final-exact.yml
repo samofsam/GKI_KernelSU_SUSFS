@@ -1,0 +1,96 @@
+name: NP03J Final Exact Build
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: np03j-final-exact-${{ github.ref }}
+  cancel-in-progress: false
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - np03j-exact-r7-review
+    paths:
+      - .github/workflows/np03j-final-exact.yml
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Verify exact pinned inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .github/workflows/build.yml
+          test -f .github/actions/build-kernel/action.yml
+
+          grep -Fq 'STABLE_SCMVERSION -g11c274d0441f-ab14259673' .github/actions/build-kernel/action.yml
+          grep -Fq 'STABLE_SCMVERSIONS {"common":"-g11c274d0441f-ab14259673",".":"-g11c274d0441f-ab14259673"}' .github/actions/build-kernel/action.yml
+          grep -Fq 'STABLE_SOURCE_DATE_EPOCH 1760394496' .github/actions/build-kernel/action.yml
+
+          echo "NP03J exact pins:"
+          echo "common=11c274d0441f287e4c37ec7a353cbc3cd169bff9"
+          echo "tag=android14-6.1-2025-09_r7"
+          echo "timestamp=Mon Oct 13 22:28:16 UTC 2025"
+          echo "build_number=14259673"
+          echo "root=d575262c1b40180a0f915544f42d8c4ab34b874b"
+          echo "susfs=153f88df3be2501d2d33364f8fe05247aecb3cef"
+          echo "nomount=6b1be186322d4e0bdc465cf27f6fc0d3679087c6"
+
+  nomount:
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Build NoMount metamodule
+        id: buildmod
+        uses: ./.github/actions/nomount-metamodule
+        with:
+          commit: 6b1be186322d4e0bdc465cf27f6fc0d3679087c6
+
+      - name: Upload NoMount metamodule
+        uses: actions/upload-artifact@v7
+        with:
+          name: NoMount-Metamodule
+          path: ${{ steps.buildmod.outputs.module_dir }}
+          if-no-files-found: error
+          compression-level: 0
+
+  kernel:
+    needs:
+      - preflight
+      - nomount
+    uses: ./.github/workflows/build.yml
+    with:
+      version: android14-6.1
+      android_version: android14
+      kernel_version: "6.1"
+      sublevel: "145"
+      os_patch_level: 2025-09
+      variant: KernelSU-Next
+      feature_set: SUSFS+NoMount
+      ksu_branch: c61d876480976e553060789759cc4b54c9e7d816
+      susfs_commit: 153f88df3be2501d2d33364f8fe05247aecb3cef
+      root_flavor: next
+      root_commit: d575262c1b40180a0f915544f42d8c4ab34b874b
+      nomount_commit: 6b1be186322d4e0bdc465cf27f6fc0d3679087c6
+      kernel_patches_commit: 41ae18b35d20e0c6ac04116785a4a1089528ae94
+      anykernel3_commit: e1e9dce98430c5c6f231f7094a8c7f4ecaf50948
+      droidspaces_commit: ff39a376f50499b665d187d46909686418570a32
+      brand_name: ""
+      keep_kmi: true
+      allow_version_mismatch: false
+      use_cache: false
+      page_size: 4k
+      exact_common_tag: android14-6.1-2025-09_r7
+      exact_common_commit: 11c274d0441f287e4c37ec7a353cbc3cd169bff9
+      exact_build_timestamp: "Mon Oct 13 22:28:16 UTC 2025"
+    secrets: inherit
