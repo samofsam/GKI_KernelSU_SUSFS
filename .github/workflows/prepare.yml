@@ -99,6 +99,11 @@ on:
         required: false
         type: string
         default: ""
+      exact_build_timestamp:
+        description: "Optional exact KBUILD_BUILD_TIMESTAMP"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   generate-matrix:
@@ -213,4 +218,5 @@ jobs:
       page_size: ${{ inputs.page_size }}
       exact_common_tag: ${{ inputs.exact_common_tag }}
       exact_common_commit: ${{ inputs.exact_common_commit }}
+      exact_build_timestamp: ${{ inputs.exact_build_timestamp }}
     secrets: inherit
