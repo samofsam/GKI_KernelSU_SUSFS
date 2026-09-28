@@ -50,11 +50,37 @@ runs:
         echo "SUSFS_COMMIT=$SUSFS_COMMIT" >> "$GITHUB_ENV"
         echo "Using SUSFS commit: $SUSFS_COMMIT"
 
-        # Pershoot's latest two gki-android14-6.1-dev commits (currently the
-        # no-features core build + Toolkit coexistence fixes) only apply to
-        # KernelSU-Next (dev-susfs fork). Other flavors use the simonpunk
-        # checkout as-is.
+        # An explicit SUSFS commit is an immutable source lock. Do not layer
+        # moving pershoot branch tips on top of it: that breaks reproducibility
+        # and can leave unresolved conflict markers while the step still appears
+        # successful. Only the legacy/unpinned path may consume that overlay.
         if [ "${{ inputs.root_flavor }}" = "next" ]; then
-          git fetch https://gitlab.com/pershoot/susfs4ksu.git gki-android14-6.1-dev || true
-          git log ..FETCH_HEAD --oneline -n 2 | awk '{print $1}' | tac | xargs git cherry-pick 2>/dev/null || true
+          if [ -n "${{ inputs.susfs_commit }}" ]; then
+            echo "[LOCK] KernelSU-Next: keeping pinned SUSFS commit unchanged; pershoot moving overlay disabled."
+          else
+            git fetch https://gitlab.com/pershoot/susfs4ksu.git gki-android14-6.1-dev
+            mapfile -t PERSHOOT_COMMITS < <(git log ..FETCH_HEAD --format='%H' -n 2 | tac)
+            for commit in "${PERSHOOT_COMMITS[@]}"; do
+              [ -n "$commit" ] || continue
+              echo "Applying pershoot SUSFS compatibility commit: $commit"
+              if ! git cherry-pick "$commit"; then
+                git status --short || true
+                git cherry-pick --abort || true
+                echo "ERROR: pershoot SUSFS compatibility cherry-pick conflicted." >&2
+                exit 1
+              fi
+            done
+          fi
+        fi
+
+        # Never allow a source tree with unresolved merges/conflict markers to
+        # progress into kernel/common.
+        if git diff --name-only --diff-filter=U | grep -q .; then
+          echo "ERROR: SUSFS checkout contains unresolved Git paths." >&2
+          git status --short >&2 || true
+          exit 1
+        fi
+        if grep -RInE '^(<<<<<<<|=======|>>>>>>>)' kernel_patches --exclude='*.md'; then
+          echo "ERROR: SUSFS checkout contains version-control conflict markers." >&2
+          exit 1
         fi
