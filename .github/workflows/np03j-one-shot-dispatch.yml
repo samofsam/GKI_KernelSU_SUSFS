@@ -1,0 +1,71 @@
+name: NP03J One-Shot Dispatch
+
+permissions:
+  actions: write
+  contents: read
+
+on:
+  push:
+    branches:
+      - np03j-exact-r7-review
+    paths:
+      - .github/workflows/np03j-one-shot-dispatch.yml
+
+jobs:
+  dispatch:
+    if: contains(github.event.head_commit.message, '[NP03J-DISPATCH]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch audited NP03J build
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          PAYLOAD=$(jq -n \
+            --arg ref "np03j-exact-r7-review" \
+            '{
+              ref: $ref,
+              return_run_details: true,
+              inputs: {
+                release_type: "CI",
+                use_cache: false,
+                allow_version_mismatch: false,
+                kernel_build_version: "6.1.x-android14",
+                os_patch_level: "2025-09",
+                page_size: "4k",
+                brand_name: "",
+                keep_kmi: true,
+                commit_mode: "verified",
+                root_flavor: "KernelSU-Next",
+                use_susfs: true,
+                use_nomount: true,
+                use_bbg: false,
+                use_net: false,
+                use_ds: false,
+                use_ntsync: false,
+                use_ptrace: false,
+                use_unicode: false,
+                use_bpf: false,
+                use_perf: false,
+                test_release_notes: false
+              }
+            }')
+
+          RESPONSE=$(curl -fsSL \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2026-03-10" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/main.yml/dispatches" \
+            -d "$PAYLOAD")
+
+          echo "$RESPONSE" | jq .
+          RUN_ID=$(echo "$RESPONSE" | jq -r '.workflow_run_id // empty')
+          RUN_URL=$(echo "$RESPONSE" | jq -r '.html_url // empty')
+
+          [ -n "$RUN_ID" ] || { echo "ERROR: workflow dispatch returned no run id." >&2; exit 1; }
+
+          echo "Dispatched workflow run: $RUN_ID"
+          echo "Run URL: $RUN_URL"
