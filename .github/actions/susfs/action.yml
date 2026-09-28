@@ -69,3 +69,14 @@ runs:
         version: ${{ inputs.version }}
         sublevel: ${{ inputs.sublevel }}
         os_patch_level: ${{ inputs.os_patch_level }}
+
+    - name: Verify SUSFS tree is conflict-free
+      shell: bash
+      working-directory: ${{ github.workspace }}/kernel/common
+      run: |
+        set -euo pipefail
+        if grep -RInE '^(<<<<<<<|=======|>>>>>>>)' fs include/linux --include='*.c' --include='*.h'; then
+          echo "ERROR: conflict markers remain after SUSFS integration." >&2
+          exit 1
+        fi
+        echo "SUSFS conflict-marker check: PASS"
