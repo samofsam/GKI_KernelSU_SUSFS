@@ -93,9 +93,9 @@ runs:
             printf '%s\n' \
               '#!/usr/bin/env bash' \
               'set -euo pipefail' \
-              'echo "STABLE_SCMVERSION -g11c274d0441f"' \
+              'echo "STABLE_SCMVERSION -g11c274d0441f-ab14259673"' \
               'echo "STABLE_SOURCE_DATE_EPOCH 1760394496"' \
-              'echo '"'"'STABLE_SCMVERSIONS {"common":"-g11c274d0441f",".":"-g11c274d0441f"}'"'"'' \
+              'echo '"'"'STABLE_SCMVERSIONS {"common":"-g11c274d0441f-ab14259673",".":"-g11c274d0441f-ab14259673"}'"'"'' \
               'echo '"'"'STABLE_SOURCE_DATE_EPOCHS {"common":"1760394496",".":"1760394496"}'"'"'' \
               > "$STATUS_SCRIPT"
             chmod +x "$STATUS_SCRIPT"
