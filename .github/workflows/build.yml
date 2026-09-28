@@ -84,6 +84,14 @@ on:
           - 4k
           - 16k
         default: "4k"
+      exact_common_tag:
+        required: false
+        type: string
+        default: ""
+      exact_common_commit:
+        required: false
+        type: string
+        default: ""
 
 jobs:
   build-gki:
@@ -158,6 +166,8 @@ jobs:
         android_version: ${{ inputs.android_version }}
         kernel_version: ${{ inputs.kernel_version }}
         os_patch_level: ${{ inputs.os_patch_level }}
+        exact_common_tag: ${{ inputs.exact_common_tag }}
+        exact_common_commit: ${{ inputs.exact_common_commit }}
 
     - name: Set Build Timestamp from Kernel Commit
       shell: bash
