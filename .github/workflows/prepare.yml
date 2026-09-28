@@ -89,6 +89,16 @@ on:
           - 4k
           - 16k
         default: "4k"
+      exact_common_tag:
+        description: "Optional immutable Android common tag"
+        required: false
+        type: string
+        default: ""
+      exact_common_commit:
+        description: "Expected 40-character Android common commit"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   generate-matrix:
@@ -201,4 +211,6 @@ jobs:
       allow_version_mismatch: ${{ inputs.allow_version_mismatch }}
       use_cache: ${{ inputs.use_cache }}
       page_size: ${{ inputs.page_size }}
+      exact_common_tag: ${{ inputs.exact_common_tag }}
+      exact_common_commit: ${{ inputs.exact_common_commit }}
     secrets: inherit
