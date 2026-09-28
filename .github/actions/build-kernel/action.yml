@@ -84,8 +84,13 @@ runs:
           if [ "$PAGE_SIZE" = "16k" ]; then
             PAGE_SIZE_FLAGS+=(--page_size=16k)
           fi
+          # Kleaf intentionally forces SOURCE_DATE_EPOCH=0 for non-stamped
+          # builds. Use the official stamp configuration so the exact
+          # SOURCE_DATE_EPOCH exported by this workflow reaches Kbuild and the
+          # kernel SCM version is embedded as intended.
           tools/bazel build \
             --config=fast \
+            --config=stamp \
             "${PAGE_SIZE_FLAGS[@]}" \
             --disk_cache=/home/runner/.cache/bazel \
             //common:kernel_aarch64/Image
