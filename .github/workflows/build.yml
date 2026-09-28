@@ -557,10 +557,82 @@ jobs:
         KBUILD_BUILD_TIMESTAMP: ${{ env.KBUILD_BUILD_TIMESTAMP }}
         KBUILD_BUILD_USER: ${{ (inputs.version == 'android15-6.6' || inputs.version == 'android16-6.12') && 'kleaf' || 'build-user' }}
         KBUILD_BUILD_HOST: build-host
+        BUILD_NUMBER: ${{ inputs.exact_common_commit == '11c274d0441f287e4c37ec7a353cbc3cd169bff9' && '14259673' || '' }}
       uses: ./.github/actions/build-kernel
       with:
         version: ${{ inputs.version }}
         page_size: ${{ inputs.page_size }}
+
+    - name: NP03J Exact Artifact Gate
+      if: inputs.exact_common_commit == '11c274d0441f287e4c37ec7a353cbc3cd169bff9'
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        IMAGE="${{ github.workspace }}/AnyKernel3/Image"
+        [ -s "$IMAGE" ] || { echo "ERROR: AnyKernel3/Image missing or empty." >&2; exit 1; }
+
+        EXPECTED_VERSION='Linux version 6.1.145-android14-11-g11c274d0441f-ab14259673 (build-user@build-host) (Android (10087095, +pgo, +bolt, +lto, -mlgo, based on r487747c) clang version 17.0.2 (https://android.googlesource.com/toolchain/llvm-project d9f89f4d16663d5012e5c09495f3b30ece3d2362), LLD 17.0.2) #1 SMP PREEMPT Mon Oct 13 22:28:16 UTC 2025'
+        ACTUAL_VERSION="$(strings "$IMAGE" | grep -m1 '^Linux version ' || true)"
+        echo "Expected: $EXPECTED_VERSION"
+        echo "Actual:   $ACTUAL_VERSION"
+        [ "$ACTUAL_VERSION" = "$EXPECTED_VERSION" ] || {
+          echo "ERROR: generated Image does not match the stock NP03J version identity." >&2
+          exit 1
+        }
+
+        case "$ACTUAL_VERSION" in
+          *-dirty*|*-maybe-dirty*|*Wild*|*"1970"*)
+            echo "ERROR: forbidden version marker found: $ACTUAL_VERSION" >&2
+            exit 1
+            ;;
+        esac
+
+        [ "${KERNEL_SOURCE_COMMIT:-}" = "11c274d0441f287e4c37ec7a353cbc3cd169bff9" ] || {
+          echo "ERROR: kernel source commit drifted: ${KERNEL_SOURCE_COMMIT:-unset}" >&2
+          exit 1
+        }
+        [ "${ROOT_COMMIT:-}" = "d575262c1b40180a0f915544f42d8c4ab34b874b" ] || {
+          echo "ERROR: KernelSU-Next commit drifted: ${ROOT_COMMIT:-unset}" >&2
+          exit 1
+        }
+        [ "${SUSFS_COMMIT:-}" = "153f88df3be2501d2d33364f8fe05247aecb3cef" ] || {
+          echo "ERROR: SUSFS commit drifted: ${SUSFS_COMMIT:-unset}" >&2
+          exit 1
+        }
+        [ "${NOMOUNT_COMMIT:-}" = "6b1be186322d4e0bdc465cf27f6fc0d3679087c6" ] || {
+          echo "ERROR: NoMount commit drifted: ${NOMOUNT_COMMIT:-unset}" >&2
+          exit 1
+        }
+        [ "${REJ_COUNT:-1}" = "0" ] || {
+          echo "ERROR: patch rejects detected: ${REJ_COUNT:-unset}" >&2
+          exit 1
+        }
+
+        CONFIG_FILE=""
+        for candidate in           "${{ github.workspace }}/kernel/bazel-bin/common/kernel_aarch64_config/out_dir/.config"           /home/runner/out/.config; do
+          if [ -f "$candidate" ]; then CONFIG_FILE="$candidate"; break; fi
+        done
+        [ -n "$CONFIG_FILE" ] || { echo "ERROR: generated .config not found." >&2; exit 1; }
+
+        for cfg in           CONFIG_ARM64_4K_PAGES=y           CONFIG_KSU=y           CONFIG_KSU_SUSFS=y           CONFIG_KSU_SUSFS_SUS_PATH=y           CONFIG_KSU_SUSFS_SUS_MOUNT=y           CONFIG_KSU_SUSFS_SUS_KSTAT=y           CONFIG_KSU_SUSFS_SPOOF_UNAME=y           CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y           CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y           CONFIG_KSU_SUSFS_SUS_MAP=y           CONFIG_KSU_SUSFS_OPEN_REDIRECT=y           CONFIG_NOMOUNT=y; do
+          grep -qx "$cfg" "$CONFIG_FILE" || {
+            echo "ERROR: missing required config: $cfg" >&2
+            exit 1
+          }
+        done
+
+        grep -qx '# CONFIG_ARM64_16K_PAGES is not set' "$CONFIG_FILE" || {
+          echo "ERROR: 16K pages unexpectedly enabled." >&2
+          exit 1
+        }
+
+        if grep -RInE '^(<<<<<<<|=======|>>>>>>>)'           "${{ github.workspace }}/kernel/common/fs"           "${{ github.workspace }}/kernel/common/include/linux"           --include='*.c' --include='*.h'; then
+          echo "ERROR: conflict markers remain in final kernel tree." >&2
+          exit 1
+        fi
+
+        echo "NP03J exact artifact gate: PASS"
 
     - name: Get Cache Stats
       uses: ./.github/actions/cache-stats
