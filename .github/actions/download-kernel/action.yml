@@ -14,6 +14,14 @@ inputs:
   os_patch_level:
     description: 'OS patch level (e.g., 2024-01)'
     required: true
+  exact_common_tag:
+    description: 'Optional immutable Android common tag to force for the common project'
+    required: false
+    default: ''
+  exact_common_commit:
+    description: 'Expected 40-character common commit SHA for exact_common_tag'
+    required: false
+    default: ''
 
 outputs:
   deprecated_branch:
@@ -38,6 +46,8 @@ runs:
         ANDROID_PART=$(echo "$VERSION" | cut -d- -f1)
         KERNEL_PART=$(echo "$VERSION" | cut -d- -f2)
         FORMATTED_BRANCH="${ANDROID_PART}-${KERNEL_PART}-${{ inputs.os_patch_level }}"
+        EXACT_COMMON_TAG="${{ inputs.exact_common_tag }}"
+        EXACT_COMMON_COMMIT="${{ inputs.exact_common_commit }}"
 
         init_repo() {
           local depth="$1"
@@ -72,6 +82,41 @@ runs:
               echo "WARNING: no head or tag found for ${FORMATTED_BRANCH}; sync will likely fail." >&2
             fi
           fi
+          # Optional exact common-source lock. Keep the monthly manifest/build tools,
+          # but force kernel/common itself to the immutable release tag used by the
+          # target stock kernel. Refuse a tag/commit mismatch.
+          if [ -n "$EXACT_COMMON_TAG" ] || [ -n "$EXACT_COMMON_COMMIT" ]; then
+            if [ -z "$EXACT_COMMON_TAG" ] || ! [[ "$EXACT_COMMON_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "ERROR: exact_common_tag and a 40-character exact_common_commit must be supplied together." >&2
+              return 1
+            fi
+            case "$EXACT_COMMON_TAG" in
+              "${FORMATTED_BRANCH}"_r[0-9]*) ;;
+              *)
+                echo "ERROR: exact tag '$EXACT_COMMON_TAG' does not belong to '$FORMATTED_BRANCH'." >&2
+                return 1
+                ;;
+            esac
+
+            TAG_REF="refs/tags/${EXACT_COMMON_TAG}"
+            PEELED_COMMIT=$(git ls-remote https://android.googlesource.com/kernel/common "${TAG_REF}^{}" | awk '{print $1; exit}')
+            if [ -z "$PEELED_COMMIT" ]; then
+              PEELED_COMMIT=$(git ls-remote https://android.googlesource.com/kernel/common "$TAG_REF" | awk '{print $1; exit}')
+            fi
+            if [ "$PEELED_COMMIT" != "$EXACT_COMMON_COMMIT" ]; then
+              echo "ERROR: exact tag resolves to '$PEELED_COMMIT', expected '$EXACT_COMMON_COMMIT'." >&2
+              return 1
+            fi
+
+            sed -i "/path=\"common\"/ s|revision=\"[^\"]*\"|revision=\"${TAG_REF}\"|" "$DEFAULT_MANIFEST_PATH"
+            grep -q "path=\"common\".*revision=\"${TAG_REF}\"" "$DEFAULT_MANIFEST_PATH" || {
+              echo "ERROR: failed to pin common project to $TAG_REF in manifest." >&2
+              return 1
+            }
+            TAG_FALLBACK="$EXACT_COMMON_TAG"
+            echo "[LOCK] kernel/common -> $EXACT_COMMON_TAG ($EXACT_COMMON_COMMIT)"
+          fi
+
           echo "tag_fallback=$TAG_FALLBACK" >> $GITHUB_OUTPUT
         }
 
@@ -104,6 +149,14 @@ runs:
             SYNC_TAG_FLAGS="--no-tags"
             if [ -n "$TAG_FALLBACK" ]; then SYNC_TAG_FLAGS=""; fi
             if timeout $SYNC_TIMEOUT repo sync -c --current-branch --no-clone-bundle $SYNC_TAG_FLAGS --jobs-checkout=4 -j4; then
+              if [ -n "$EXACT_COMMON_COMMIT" ]; then
+                ACTUAL_COMMON_COMMIT=$(git -C common rev-parse HEAD)
+                if [ "$ACTUAL_COMMON_COMMIT" != "$EXACT_COMMON_COMMIT" ]; then
+                  echo "ERROR: synced common HEAD '$ACTUAL_COMMON_COMMIT' != locked '$EXACT_COMMON_COMMIT'." >&2
+                  exit 1
+                fi
+                echo "[LOCK VERIFIED] common HEAD: $ACTUAL_COMMON_COMMIT"
+              fi
               echo "Kernel repository initialization and sync succeeded on attempt $attempt."
               break
             else
