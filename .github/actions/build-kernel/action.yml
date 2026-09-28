@@ -81,12 +81,26 @@ runs:
         else
           sed -i '/name = "kernel_aarch64",/a\    check_defconfig = "disabled",' common/BUILD.bazel
 
-          # For the exact NP03J source, stamped Kleaf + --nokleaf_localversion
-          # already resolves scripts/setlocalversion to:
-          #   -g11c274d0441f-ab14259673
-          # Do not add common/.scmversion here; doing so duplicates the git
-          # suffix. The final artifact gate below enforces the complete stock
-          # Linux version line byte-for-byte.
+          # Exact NP03J stock identity lock.
+          # Android Kleaf officially supports common/workspace_status.json to
+          # override SCMVERSION and SOURCE_DATE_EPOCH for stamped builds.
+          # This avoids deriving SCM identity from our intentionally patched
+          # KSU/SUSFS/NoMount working tree.
+          if [ "${KERNEL_SOURCE_COMMIT:-}" = "11c274d0441f287e4c37ec7a353cbc3cd169bff9" ]; then
+            cat > common/workspace_status.json <<'EOF'
+{"SCMVERSION":"-g11c274d0441f","SOURCE_DATE_EPOCH":1760394496}
+EOF
+            python3 - <<'PY'
+import json
+p = "common/workspace_status.json"
+d = json.load(open(p, "r", encoding="utf-8"))
+assert d == {
+    "SCMVERSION": "-g11c274d0441f",
+    "SOURCE_DATE_EPOCH": 1760394496,
+}, d
+print("[LOCK] workspace_status.json verified:", d)
+PY
+          fi
 
           PAGE_SIZE_FLAGS=()
           if [ "$PAGE_SIZE" = "16k" ]; then
@@ -99,7 +113,6 @@ runs:
           tools/bazel build \
             --config=fast \
             --config=stamp \
-            --nokleaf_localversion \
             "${PAGE_SIZE_FLAGS[@]}" \
             --disk_cache=/home/runner/.cache/bazel \
             //common:kernel_aarch64/Image
