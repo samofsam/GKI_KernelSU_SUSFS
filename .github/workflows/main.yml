@@ -900,14 +900,15 @@ jobs:
       ksu_branch: ${{ needs.resolve-sources.outputs.kernelsu_commit }}
       anykernel3_commit: ${{ needs.resolve-sources.outputs.anykernel3_commit }}
       droidspaces_commit: ${{ needs.resolve-sources.outputs.droidspaces_commit }}
-      brand_name: ${{ inputs.brand_name }}
-      keep_kmi: ${{ inputs.keep_kmi }}
+      brand_name: ""
+      keep_kmi: true
       os_patch_level: ${{ inputs.os_patch_level }}
       allow_version_mismatch: ${{ inputs.allow_version_mismatch }}
       use_cache: ${{ inputs.use_cache }}
       page_size: ${{ inputs.page_size }}
       exact_common_tag: android14-6.1-2025-09_r7
       exact_common_commit: 11c274d0441f287e4c37ec7a353cbc3cd169bff9
+      exact_build_timestamp: "Mon Oct 13 22:28:16 UTC 2025"
     secrets: inherit
 
   build-android15-6-6:
