@@ -82,13 +82,26 @@ runs:
           sed -i '/name = "kernel_aarch64",/a\    check_defconfig = "disabled",' common/BUILD.bazel
 
           # Exact NP03J stock identity lock.
-          # Android Kleaf officially supports common/workspace_status.json to
-          # override SCMVERSION and SOURCE_DATE_EPOCH for stamped builds.
-          # This avoids deriving SCM identity from our intentionally patched
-          # KSU/SUSFS/NoMount working tree.
+          # The checked-out Kleaf revision ignores common/workspace_status.json,
+          # so provide the Bazel workspace-status values explicitly. Emit both
+          # the legacy singular keys and the newer per-project JSON keys; unused
+          # keys are harmless, while this keeps the lock compatible with the
+          # android14-6.1 Kleaf transition.
+          WORKSPACE_STATUS_FLAG=()
           if [ "${KERNEL_SOURCE_COMMIT:-}" = "11c274d0441f287e4c37ec7a353cbc3cd169bff9" ]; then
-            printf '%s\n' '{"SCMVERSION":"-g11c274d0441f","SOURCE_DATE_EPOCH":1760394496}' > common/workspace_status.json
-            python3 -c 'import json; p="common/workspace_status.json"; d=json.load(open(p, encoding="utf-8")); assert d == {"SCMVERSION":"-g11c274d0441f","SOURCE_DATE_EPOCH":1760394496}, d; print("[LOCK] workspace_status.json verified:", d)'
+            STATUS_SCRIPT="$PWD/np03j_workspace_status.sh"
+            printf '%s\n' \
+              '#!/usr/bin/env bash' \
+              'set -euo pipefail' \
+              'echo "STABLE_SCMVERSION -g11c274d0441f"' \
+              'echo "STABLE_SOURCE_DATE_EPOCH 1760394496"' \
+              'echo '"'"'STABLE_SCMVERSIONS {"common":"-g11c274d0441f",".":"-g11c274d0441f"}'"'"'' \
+              'echo '"'"'STABLE_SOURCE_DATE_EPOCHS {"common":"1760394496",".":"1760394496"}'"'"'' \
+              > "$STATUS_SCRIPT"
+            chmod +x "$STATUS_SCRIPT"
+            echo "[LOCK] Custom NP03J workspace status:"
+            "$STATUS_SCRIPT"
+            WORKSPACE_STATUS_FLAG+=(--workspace_status_command="$STATUS_SCRIPT")
           fi
 
           PAGE_SIZE_FLAGS=()
@@ -102,6 +115,7 @@ runs:
           tools/bazel build \
             --config=fast \
             --config=stamp \
+            "${WORKSPACE_STATUS_FLAG[@]}" \
             "${PAGE_SIZE_FLAGS[@]}" \
             --disk_cache=/home/runner/.cache/bazel \
             //common:kernel_aarch64/Image
