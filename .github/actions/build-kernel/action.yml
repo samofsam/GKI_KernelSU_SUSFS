@@ -87,19 +87,8 @@ runs:
           # This avoids deriving SCM identity from our intentionally patched
           # KSU/SUSFS/NoMount working tree.
           if [ "${KERNEL_SOURCE_COMMIT:-}" = "11c274d0441f287e4c37ec7a353cbc3cd169bff9" ]; then
-            cat > common/workspace_status.json <<'EOF'
-{"SCMVERSION":"-g11c274d0441f","SOURCE_DATE_EPOCH":1760394496}
-EOF
-            python3 - <<'PY'
-import json
-p = "common/workspace_status.json"
-d = json.load(open(p, "r", encoding="utf-8"))
-assert d == {
-    "SCMVERSION": "-g11c274d0441f",
-    "SOURCE_DATE_EPOCH": 1760394496,
-}, d
-print("[LOCK] workspace_status.json verified:", d)
-PY
+            printf '%s\n' '{"SCMVERSION":"-g11c274d0441f","SOURCE_DATE_EPOCH":1760394496}' > common/workspace_status.json
+            python3 -c 'import json; p="common/workspace_status.json"; d=json.load(open(p, encoding="utf-8")); assert d == {"SCMVERSION":"-g11c274d0441f","SOURCE_DATE_EPOCH":1760394496}, d; print("[LOCK] workspace_status.json verified:", d)'
           fi
 
           PAGE_SIZE_FLAGS=()
